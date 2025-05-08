@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # wscript
 
+from waflib import Utils
+import os, json, re
+
 def options(opt):
     opt.load("compiler_cxx")
     opt.load("clangd", tooldir="tools")
@@ -34,16 +37,29 @@ def build(bld):
         target="",
         name="concord")
 
-    concord_lib = bld.srcnode.find_node("extern/concord/lib/libdiscord.a")
-    if not concord_lib:
-        bld.fatal("Couldn't find lib/libdiscord.a.")
+    staging = bld.bldnode.make_node("concord")
+    bld(
+        rule="PREFIX=%s ${MAKE} -C %s install" % (
+            staging.abspath(),
+            concord_src.abspath()
+        ),
+        source=[],
+        target="",
+        name="concord install into %s" % staging.abspath(),
+    )
 
-    inc = ["include", "extern/concord/include"]
+    concord_lib = staging.make_node("lib/libdiscord.a")
+    hdr = staging.make_node("include")
+    if not concord_lib or not hdr:
+        bld.fatal("Concord install faield; no lib or headers...")
+
+    inc = ["include", hdr.abspath()]
     files = bld.path.ant_glob("src/**/*.cpp")
     bld.program(
         features="c cprogram",
         target="autoelector",
         source=files,
         includes=inc,
-        linkflags=[concord_lib.abspath()]
+        #linkflags=[concord_lib.abspath()]
+        libpath=[staging.make_node("lib").abspath()]
     )
